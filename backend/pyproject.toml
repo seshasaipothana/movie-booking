@@ -1,0 +1,22 @@
+[project]
+name = "movie-booking-backend"
+version = "0.1.0"
+description = "Movie booking app backend — FastAPI + async SQLAlchemy + Redis"
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# E/W: pycodestyle, F: pyflakes, I: isort, B: bugbear,
+# UP: pyupgrade, SIM: simplify, C4: comprehensions, RUF: ruff-specific
+select = ["E", "W", "F", "I", "B", "UP", "SIM", "C4", "RUF"]
+ignore = [
+  "E501",  # line-too-long — the formatter handles this
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
