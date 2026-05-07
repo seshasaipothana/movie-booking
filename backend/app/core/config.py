@@ -4,8 +4,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Typed settings, populated from environment variables and .env file."""
-
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -18,6 +16,10 @@ class Settings(BaseSettings):
     # App
     app_env: str = "development"
 
+    # JWT
+    jwt_secret: str
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 60
 
-# Single shared settings instance — import this from anywhere
+
 settings = Settings()
