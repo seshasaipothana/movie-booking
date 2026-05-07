@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 
-const api = axios.create({ baseURL: '/' })
+const api = axios.create({ 
+  baseURL: 'https://movie-booking-backend-8r8x.onrender.com'
+})
 
 api.interceptors.request.use(config => {
   const token = localStorage.getItem('token')
