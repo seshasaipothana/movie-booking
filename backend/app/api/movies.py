@@ -13,6 +13,8 @@ from app.models.movie import Movie
 from app.models.screen import Screen
 from app.models.seat import Seat
 from app.models.showtime import Showtime
+from app.models.booking import Booking, BookingStatus
+from app.models.booking_seat import BookingSeat
 
 router = APIRouter(prefix="/api", tags=["browse"])
 
@@ -98,5 +100,18 @@ async def list_seats(showtime_id: int, db: AsyncSession = Depends(get_db)):
         select(Seat)
         .where(Seat.screen_id == showtime.screen_id)
         .order_by(Seat.row, Seat.number)
+    )
+    return result.scalars().all()
+
+@router.get("/showtimes/{showtime_id}/booked-seats", response_model=list[int])
+async def booked_seats(showtime_id: int, db: AsyncSession = Depends(get_db)):
+    """Returns list of seat IDs already booked for this showtime."""
+    result = await db.execute(
+        select(BookingSeat.seat_id)
+        .join(Booking, Booking.id == BookingSeat.booking_id)
+        .where(
+            Booking.showtime_id == showtime_id,
+            Booking.status != BookingStatus.CANCELLED,
+        )
     )
     return result.scalars().all()
