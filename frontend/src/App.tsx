@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
+import MyBookings from './MyBookings'
 
 const api = axios.create({ 
   baseURL: 'https://movie-booking-backend-8r8x.onrender.com'
@@ -30,6 +31,7 @@ export default function App() {
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState<'success' | 'error'>('success')
   const [loading, setLoading] = useState(false)
+  const [showMyBookings, setShowMyBookings] = useState(false)
 
   useEffect(() => {
     if (token) {
@@ -104,6 +106,7 @@ export default function App() {
     setMovies([])
     setShowtimes([])
     setSelectedShowtime(null)
+    setShowMyBookings(false)
   }
 
   function getMovie(id: number) {
@@ -117,7 +120,6 @@ export default function App() {
     })
   }
 
-  // --- Auth screen ---
   if (!token) return (
     <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center p-4">
       <div className="bg-gray-900 border border-gray-800 p-8 rounded-2xl w-full max-w-sm shadow-2xl">
@@ -125,7 +127,6 @@ export default function App() {
         <p className="text-center text-gray-400 text-sm mb-6">
           {isLogin ? 'Welcome back' : 'Create your account'}
         </p>
-
         {!isLogin && (
           <input
             className="w-full mb-3 px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 focus:outline-none focus:border-blue-500 text-sm"
@@ -148,7 +149,6 @@ export default function App() {
           onChange={e => setPassword(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleAuth()}
         />
-
         <button
           onClick={handleAuth}
           disabled={loading}
@@ -156,14 +156,12 @@ export default function App() {
         >
           {loading ? 'Please wait...' : isLogin ? 'Login' : 'Sign Up'}
         </button>
-
         <p
           className="text-center text-sm text-gray-400 cursor-pointer hover:text-white transition-colors"
           onClick={() => setIsLogin(!isLogin)}
         >
           {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Login'}
         </p>
-
         {message && (
           <p className={`mt-4 text-center text-sm font-medium ${messageType === 'error' ? 'text-red-400' : 'text-green-400'}`}>
             {message}
@@ -173,10 +171,10 @@ export default function App() {
     </div>
   )
 
-  // --- Main app ---
+  if (showMyBookings) return <MyBookings onBack={() => setShowMyBookings(false)} />
+
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      {/* Header */}
       <header className="border-b border-gray-800 px-6 py-4 flex justify-between items-center">
         <h1
           className="text-xl font-bold cursor-pointer"
@@ -184,17 +182,23 @@ export default function App() {
         >
           🎬 Movie Booking
         </h1>
-        <button
-          onClick={logout}
-          className="text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-4 py-2 rounded-lg transition-colors"
-        >
-          Logout
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setShowMyBookings(true)}
+            className="text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-4 py-2 rounded-lg transition-colors"
+          >
+            My Bookings
+          </button>
+          <button
+            onClick={logout}
+            className="text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-4 py-2 rounded-lg transition-colors"
+          >
+            Logout
+          </button>
+        </div>
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-8">
-
-        {/* Message banner */}
         {message && (
           <div className={`mb-6 p-4 rounded-xl text-center font-medium text-sm ${
             messageType === 'error'
@@ -205,7 +209,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Showtimes list */}
         {!selectedShowtime && (
           <>
             <h2 className="text-lg font-semibold mb-4 text-gray-200">Now Showing</h2>
@@ -235,7 +238,6 @@ export default function App() {
           </>
         )}
 
-        {/* Seat selection */}
         {selectedShowtime && (
           <>
             <button
@@ -244,20 +246,15 @@ export default function App() {
             >
               ← Back to showtimes
             </button>
-
             <div className="mb-6">
               <h2 className="text-2xl font-bold">{getMovie(selectedShowtime.movie_id)?.title}</h2>
               <p className="text-gray-400 mt-1 text-sm">
                 {formatTime(selectedShowtime.start_time)} &nbsp;·&nbsp; Screen {selectedShowtime.screen_id} &nbsp;·&nbsp; ₹{selectedShowtime.price}/seat
               </p>
             </div>
-
-            {/* Screen indicator */}
             <div className="mb-6 py-2 px-4 bg-gray-800 border border-gray-700 rounded-lg text-center text-xs text-gray-400 tracking-widest uppercase">
               ── Screen ──
             </div>
-
-            {/* Legend */}
             <div className="flex gap-4 mb-4 text-xs text-gray-400">
               <span className="flex items-center gap-1">
                 <span className="w-4 h-4 rounded bg-gray-700 inline-block" /> Available
@@ -269,8 +266,6 @@ export default function App() {
                 <span className="w-4 h-4 rounded bg-gray-600 opacity-40 inline-block" /> Booked
               </span>
             </div>
-
-            {/* Seat grid */}
             <div className="grid grid-cols-10 gap-2 mb-8">
               {seats.map(seat => {
                 const isBooked = bookedSeatIds.includes(seat.id)
@@ -293,8 +288,6 @@ export default function App() {
                 )
               })}
             </div>
-
-            {/* Booking summary */}
             {selectedSeats.length > 0 && (
               <div className="bg-gray-900 border border-gray-700 p-5 rounded-xl">
                 <div className="flex justify-between items-center mb-4">
