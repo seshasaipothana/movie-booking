@@ -33,11 +33,19 @@ export default function App() {
   const [messageType, setMessageType] = useState<'success' | 'error'>('success')
   const [loading, setLoading] = useState(false)
   const [showMyBookings, setShowMyBookings] = useState(false)
+  const [dataLoading, setDataLoading] = useState(false)
 
   useEffect(() => {
     if (token) {
-      api.get('/api/movies').then(r => setMovies(r.data))
-      api.get('/api/showtimes').then(r => setShowtimes(r.data))
+      setDataLoading(true)
+      Promise.all([
+        api.get('/api/movies'),
+        api.get('/api/showtimes')
+      ]).then(([moviesRes, showtimesRes]) => {
+        setMovies(moviesRes.data)
+        setShowtimes(showtimesRes.data)
+        setDataLoading(false)
+      })
     }
   }, [token])
 
@@ -81,7 +89,7 @@ export default function App() {
   function showMsg(text: string, type: 'success' | 'error' = 'success') {
     setMessage(text)
     setMessageType(type)
-    setTimeout(() => setMessage(''), 4000)
+    setTimeout(() => setMessage(''), 5000)
   }
 
   async function handleAuth() {
@@ -103,6 +111,7 @@ export default function App() {
     setSelectedShowtime(showtime)
     setSelectedSeats([])
     setMessage('')
+    setDataLoading(true)
     const [seatsRes, bookedRes, lockedRes] = await Promise.all([
       api.get(`/api/showtimes/${showtime.id}/seats`),
       api.get(`/api/showtimes/${showtime.id}/booked-seats`),
@@ -111,6 +120,7 @@ export default function App() {
     setSeats(seatsRes.data)
     setBookedSeatIds(bookedRes.data)
     setLockedSeatIds(lockedRes.data)
+    setDataLoading(false)
   }
 
   function broadcastSeatUpdate(message: { type: string; seat_id: number }) {
@@ -139,20 +149,14 @@ export default function App() {
 
     try {
       if (isCurrentlySelected) {
-        // Unlock the seat
         await api.post(`/api/seat-locks/${selectedShowtime.id}/${id}/unlock`)
         setSelectedSeats(prev => prev.filter(s => s !== id))
         setLockedSeatIds(prev => prev.filter(s => s !== id))
-        
-        // Broadcast unlock via WebSocket
         broadcastSeatUpdate({ type: 'seat_unlocked', seat_id: id })
       } else {
-        // Lock the seat
         await api.post(`/api/seat-locks/${selectedShowtime.id}/${id}/lock`)
         setSelectedSeats(prev => [...prev, id])
         setLockedSeatIds(prev => [...prev, id])
-        
-        // Broadcast lock via WebSocket
         broadcastSeatUpdate({ type: 'seat_locked', seat_id: id })
       }
     } catch (e: unknown) {
@@ -169,9 +173,8 @@ export default function App() {
         showtime_id: selectedShowtime.id,
         seat_ids: selectedSeats,
       })
-      showMsg(`✅ Booked ${selectedSeats.length} seat(s)! Total: ₹${selectedSeats.length * selectedShowtime.price}`)
+      showMsg(`🎉 Booking confirmed! ${selectedSeats.length} seat(s) • ₹${selectedSeats.length * selectedShowtime.price}`)
       
-      // Unlock all seats and broadcast booking
       await Promise.all(
         selectedSeats.map(seatId => {
           broadcastSeatUpdate({ type: 'seat_booked', seat_id: seatId })
@@ -215,28 +218,40 @@ export default function App() {
   }
 
   if (!token) return (
-    <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center p-4">
-      <div className="bg-gray-900 border border-gray-800 p-8 rounded-2xl w-full max-w-sm shadow-2xl">
-        <h1 className="text-2xl font-bold mb-1 text-center">🎬 Movie Booking</h1>
-        <p className="text-center text-gray-400 text-sm mb-6">
-          {isLogin ? 'Welcome back' : 'Create your account'}
-        </p>
+    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-gray-900 to-black text-white flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Animated background elements */}
+      <div className="absolute top-0 left-0 w-96 h-96 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
+      <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
+      <div className="absolute bottom-0 left-1/2 w-96 h-96 bg-pink-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000"></div>
+      
+      <div className="relative backdrop-blur-xl bg-white/10 border border-white/20 p-8 rounded-3xl w-full max-w-md shadow-2xl">
+        <div className="text-center mb-8">
+          <div className="text-5xl mb-3">🎬</div>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+            CineBook
+          </h1>
+          <p className="text-gray-300 text-sm mt-2">
+            {isLogin ? 'Welcome back to the show' : 'Join us for the premiere'}
+          </p>
+        </div>
+
         {!isLogin && (
           <input
-            className="w-full mb-3 px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 focus:outline-none focus:border-blue-500 text-sm"
+            className="w-full mb-4 px-5 py-4 rounded-2xl bg-white/5 border border-white/10 focus:outline-none focus:border-purple-400 focus:bg-white/10 text-white placeholder-gray-400 transition-all"
             placeholder="Full name"
             value={name}
             onChange={e => setName(e.target.value)}
           />
         )}
         <input
-          className="w-full mb-3 px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 focus:outline-none focus:border-blue-500 text-sm"
+          className="w-full mb-4 px-5 py-4 rounded-2xl bg-white/5 border border-white/10 focus:outline-none focus:border-purple-400 focus:bg-white/10 text-white placeholder-gray-400 transition-all"
           placeholder="Email"
+          type="email"
           value={email}
           onChange={e => setEmail(e.target.value)}
         />
         <input
-          className="w-full mb-4 px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 focus:outline-none focus:border-blue-500 text-sm"
+          className="w-full mb-6 px-5 py-4 rounded-2xl bg-white/5 border border-white/10 focus:outline-none focus:border-purple-400 focus:bg-white/10 text-white placeholder-gray-400 transition-all"
           type="password"
           placeholder="Password"
           value={password}
@@ -246,20 +261,24 @@ export default function App() {
         <button
           onClick={handleAuth}
           disabled={loading}
-          className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 py-3 rounded-lg font-semibold text-sm mb-4 transition-colors"
+          className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 disabled:opacity-50 py-4 rounded-2xl font-bold text-white shadow-lg hover:shadow-purple-500/50 transition-all transform hover:scale-[1.02] disabled:hover:scale-100"
         >
-          {loading ? 'Please wait...' : isLogin ? 'Login' : 'Sign Up'}
+          {loading ? 'Please wait...' : isLogin ? 'Sign In' : 'Create Account'}
         </button>
         <p
-          className="text-center text-sm text-gray-400 cursor-pointer hover:text-white transition-colors"
+          className="text-center text-sm text-gray-300 mt-6 cursor-pointer hover:text-white transition-colors"
           onClick={() => setIsLogin(!isLogin)}
         >
-          {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Login'}
+          {isLogin ? "New here? Create an account" : 'Already have an account? Sign in'}
         </p>
         {message && (
-          <p className={`mt-4 text-center text-sm font-medium ${messageType === 'error' ? 'text-red-400' : 'text-green-400'}`}>
+          <div className={`mt-6 p-4 rounded-2xl text-center text-sm font-medium backdrop-blur-sm ${
+            messageType === 'error' 
+              ? 'bg-red-500/20 border border-red-500/30 text-red-200' 
+              : 'bg-green-500/20 border border-green-500/30 text-green-200'
+          }`}>
             {message}
-          </p>
+          </div>
         )}
       </div>
     </div>
@@ -268,67 +287,107 @@ export default function App() {
   if (showMyBookings) return <MyBookings onBack={() => setShowMyBookings(false)} />
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      <header className="border-b border-gray-800 px-6 py-4 flex justify-between items-center">
-        <h1
-          className="text-xl font-bold cursor-pointer"
-          onClick={() => { setSelectedShowtime(null); setMessage('') }}
-        >
-          🎬 Movie Booking
-        </h1>
-        <div className="flex gap-3">
-          <button
-            onClick={() => setShowMyBookings(true)}
-            className="text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-4 py-2 rounded-lg transition-colors"
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-black text-white">
+      {/* Glassmorphic header */}
+      <header className="sticky top-0 z-50 backdrop-blur-xl bg-black/30 border-b border-white/10">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+          <h1
+            className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent cursor-pointer flex items-center gap-2"
+            onClick={() => { setSelectedShowtime(null); setMessage('') }}
           >
-            My Bookings
-          </button>
-          <button
-            onClick={logout}
-            className="text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 px-4 py-2 rounded-lg transition-colors"
-          >
-            Logout
-          </button>
+            <span className="text-3xl">🎬</span> CineBook
+          </h1>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowMyBookings(true)}
+              className="px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all font-medium"
+            >
+              My Bookings
+            </button>
+            <button
+              onClick={logout}
+              className="px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all font-medium"
+            >
+              Logout
+            </button>
+          </div>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-6 py-8">
-        {message && (
-          <div className={`mb-6 p-4 rounded-xl text-center font-medium text-sm ${
+      {/* Toast notification */}
+      {message && (
+        <div className="fixed top-24 right-6 z-50 animate-slide-in-right">
+          <div className={`backdrop-blur-xl rounded-2xl p-4 shadow-2xl border max-w-md ${
             messageType === 'error'
-              ? 'bg-red-900/50 border border-red-700 text-red-300'
-              : 'bg-green-900/50 border border-green-700 text-green-300'
+              ? 'bg-red-500/20 border-red-500/30 text-red-100'
+              : 'bg-green-500/20 border-green-500/30 text-green-100'
           }`}>
-            {message}
+            <p className="font-medium">{message}</p>
           </div>
-        )}
+        </div>
+      )}
 
+      <main className="max-w-7xl mx-auto px-6 py-12">
         {!selectedShowtime && (
           <>
-            <h2 className="text-lg font-semibold mb-4 text-gray-200">Now Showing</h2>
-            <div className="grid gap-3">
-              {showtimes.map(s => {
-                const movie = getMovie(s.movie_id)
-                return (
-                  <div
-                    key={s.id}
-                    onClick={() => loadSeats(s)}
-                    className="bg-gray-900 hover:bg-gray-800 border border-gray-800 hover:border-gray-600 cursor-pointer p-4 rounded-xl flex justify-between items-center transition-all"
-                  >
-                    <div>
-                      <p className="font-semibold text-white">{movie?.title}</p>
-                      <p className="text-gray-400 text-sm mt-1">
-                        {formatTime(s.start_time)} &nbsp;·&nbsp; Screen {s.screen_id} &nbsp;·&nbsp; {movie?.duration_minutes} min
-                      </p>
-                    </div>
-                    <div className="text-right ml-4 shrink-0">
-                      <p className="text-green-400 font-bold">₹{s.price}</p>
-                      <p className="text-gray-500 text-xs mt-1">per seat</p>
-                    </div>
-                  </div>
-                )
-              })}
+            <div className="mb-8">
+              <h2 className="text-3xl font-bold mb-2">Now Showing</h2>
+              <p className="text-gray-400">Pick your perfect show</p>
             </div>
+
+            {dataLoading ? (
+              <div className="grid gap-4">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="backdrop-blur-xl bg-white/5 border border-white/10 p-6 rounded-3xl animate-pulse">
+                    <div className="h-6 bg-white/10 rounded w-1/3 mb-3"></div>
+                    <div className="h-4 bg-white/10 rounded w-2/3"></div>
+                  </div>
+                ))}
+              </div>
+            ) : showtimes.length === 0 ? (
+              <div className="text-center py-20">
+                <div className="text-6xl mb-4">🎭</div>
+                <p className="text-gray-400 text-lg">No showtimes available</p>
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                {showtimes.map(s => {
+                  const movie = getMovie(s.movie_id)
+                  return (
+                    <div
+                      key={s.id}
+                      onClick={() => loadSeats(s)}
+                      className="group cursor-pointer backdrop-blur-xl bg-gradient-to-r from-white/5 to-white/10 hover:from-white/10 hover:to-white/15 border border-white/10 hover:border-white/20 p-6 rounded-3xl transition-all transform hover:scale-[1.02] hover:shadow-2xl hover:shadow-purple-500/20"
+                    >
+                      <div className="flex justify-between items-center">
+                        <div className="flex-1">
+                          <h3 className="text-2xl font-bold mb-2 group-hover:text-purple-300 transition-colors">
+                            {movie?.title}
+                          </h3>
+                          <div className="flex items-center gap-4 text-gray-300 text-sm">
+                            <span className="flex items-center gap-1">
+                              <span className="text-purple-400">📅</span> {formatTime(s.start_time)}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <span className="text-purple-400">🎞️</span> Screen {s.screen_id}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <span className="text-purple-400">⏱️</span> {movie?.duration_minutes} min
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-right ml-6">
+                          <div className="text-3xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
+                            ₹{s.price}
+                          </div>
+                          <p className="text-gray-400 text-sm mt-1">per seat</p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </>
         )}
 
@@ -336,73 +395,130 @@ export default function App() {
           <>
             <button
               onClick={() => { setSelectedShowtime(null); setMessage('') }}
-              className="mb-6 text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1 transition-colors"
+              className="mb-8 flex items-center gap-2 text-purple-300 hover:text-purple-200 transition-colors group"
             >
-              ← Back to showtimes
+              <span className="transform group-hover:-translate-x-1 transition-transform">←</span>
+              <span>Back to showtimes</span>
             </button>
-            <div className="mb-6">
-              <h2 className="text-2xl font-bold">{getMovie(selectedShowtime.movie_id)?.title}</h2>
-              <p className="text-gray-400 mt-1 text-sm">
-                {formatTime(selectedShowtime.start_time)} &nbsp;·&nbsp; Screen {selectedShowtime.screen_id} &nbsp;·&nbsp; ₹{selectedShowtime.price}/seat
-              </p>
+
+            <div className="backdrop-blur-xl bg-gradient-to-br from-white/10 to-white/5 border border-white/10 p-8 rounded-3xl mb-8">
+              <h2 className="text-4xl font-bold mb-3 bg-gradient-to-r from-purple-300 to-pink-300 bg-clip-text text-transparent">
+                {getMovie(selectedShowtime.movie_id)?.title}
+              </h2>
+              <div className="flex items-center gap-4 text-gray-300">
+                <span className="flex items-center gap-2">
+                  <span className="text-purple-400">📅</span> {formatTime(selectedShowtime.start_time)}
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="text-purple-400">🎞️</span> Screen {selectedShowtime.screen_id}
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="text-purple-400">💰</span> ₹{selectedShowtime.price}/seat
+                </span>
+              </div>
             </div>
-            <div className="mb-6 py-2 px-4 bg-gray-800 border border-gray-700 rounded-lg text-center text-xs text-gray-400 tracking-widest uppercase">
-              ── Screen ──
+
+            {/* Screen indicator */}
+            <div className="mb-8 py-4 px-6 backdrop-blur-xl bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-white/20 rounded-2xl text-center">
+              <div className="text-xs text-gray-300 tracking-[0.3em] uppercase font-semibold">
+                ── Screen ──
+              </div>
             </div>
-            <div className="flex gap-4 mb-4 text-xs text-gray-400">
-              <span className="flex items-center gap-1">
-                <span className="w-4 h-4 rounded bg-gray-700 inline-block" /> Available
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-4 h-4 rounded bg-blue-600 inline-block" /> Selected
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-4 h-4 rounded bg-yellow-600 inline-block" /> Held
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-4 h-4 rounded bg-gray-600 opacity-40 inline-block" /> Booked
-              </span>
+
+            {/* Seat legend */}
+            <div className="flex flex-wrap gap-6 mb-8 text-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-lg bg-white/10 border border-white/20"></div>
+                <span className="text-gray-300">Available</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 shadow-lg shadow-purple-500/50"></div>
+                <span className="text-gray-300">Selected</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-lg bg-gradient-to-br from-yellow-500 to-orange-500 shadow-lg shadow-yellow-500/50"></div>
+                <span className="text-gray-300">Held</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-lg bg-gray-600/40 opacity-60"></div>
+                <span className="text-gray-300">Booked</span>
+              </div>
             </div>
-            <div className="grid grid-cols-10 gap-2 mb-8">
-              {seats.map(seat => {
-                const isBooked = bookedSeatIds.includes(seat.id)
-                const isSelected = selectedSeats.includes(seat.id)
-                const isLocked = lockedSeatIds.includes(seat.id) && !isSelected
-                return (
-                  <button
-                    key={seat.id}
-                    onClick={() => toggleSeat(seat.id)}
-                    disabled={isBooked || isLocked}
-                    className={`py-2 rounded text-xs font-semibold transition-colors ${
-                      isBooked
-                        ? 'bg-gray-700 text-gray-600 cursor-not-allowed opacity-40'
-                        : isLocked
-                        ? 'bg-yellow-600 text-yellow-200 cursor-not-allowed'
-                        : isSelected
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-                    }`}
-                  >
-                    {seat.row}{seat.number}
-                  </button>
-                )
-              })}
-            </div>
+
+            {/* Seat counter */}
             {selectedSeats.length > 0 && (
-              <div className="bg-gray-900 border border-gray-700 p-5 rounded-xl">
-                <div className="flex justify-between items-center mb-4">
+              <div className="mb-6 backdrop-blur-xl bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 p-4 rounded-2xl">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-purple-200">
+                    {selectedSeats.length} seat{selectedSeats.length > 1 ? 's' : ''} selected
+                  </span>
+                  <span className="text-sm text-gray-300">
+                    {selectedSeats.length}/{seats.length} seats
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-300 rounded-full"
+                    style={{ width: `${(selectedSeats.length / seats.length) * 100}%` }}
+                  ></div>
+                </div>
+              </div>
+            )}
+
+            {/* Seats grid */}
+            {dataLoading ? (
+              <div className="grid grid-cols-10 gap-3 mb-8">
+                {Array.from({ length: 60 }).map((_, i) => (
+                  <div key={i} className="aspect-square rounded-xl bg-white/5 animate-pulse"></div>
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-10 gap-3 mb-10">
+                {seats.map(seat => {
+                  const isBooked = bookedSeatIds.includes(seat.id)
+                  const isSelected = selectedSeats.includes(seat.id)
+                  const isLocked = lockedSeatIds.includes(seat.id) && !isSelected
+                  return (
+                    <button
+                      key={seat.id}
+                      onClick={() => toggleSeat(seat.id)}
+                      disabled={isBooked || isLocked}
+                      title={isBooked ? 'Booked' : isLocked ? 'Held by another user' : isSelected ? 'Selected' : 'Available'}
+                      className={`aspect-square rounded-xl text-sm font-bold transition-all transform ${
+                        isBooked
+                          ? 'bg-gray-600/30 text-gray-500 cursor-not-allowed opacity-50'
+                          : isLocked
+                          ? 'bg-gradient-to-br from-yellow-500/80 to-orange-500/80 text-yellow-100 cursor-not-allowed shadow-lg shadow-yellow-500/30 scale-95'
+                          : isSelected
+                          ? 'bg-gradient-to-br from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/50 scale-110'
+                          : 'bg-white/10 hover:bg-white/20 text-gray-200 border border-white/20 hover:border-white/40 hover:scale-105'
+                      }`}
+                    >
+                      {seat.row}{seat.number}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Booking panel */}
+            {selectedSeats.length > 0 && (
+              <div className="sticky bottom-6 backdrop-blur-2xl bg-gradient-to-r from-purple-900/80 to-pink-900/80 border border-white/20 p-6 rounded-3xl shadow-2xl">
+                <div className="flex justify-between items-center">
                   <div>
-                    <p className="text-sm text-gray-400">{selectedSeats.length} seat(s) selected</p>
-                    <p className="text-xl font-bold text-white mt-1">
+                    <p className="text-gray-300 text-sm mb-1">
+                      {selectedSeats.length} seat{selectedSeats.length > 1 ? 's' : ''} selected
+                    </p>
+                    <p className="text-4xl font-bold bg-gradient-to-r from-green-300 to-emerald-300 bg-clip-text text-transparent">
                       ₹{selectedSeats.length * selectedShowtime.price}
                     </p>
                   </div>
                   <button
                     onClick={book}
                     disabled={loading}
-                    className="bg-green-600 hover:bg-green-700 disabled:opacity-50 px-6 py-3 rounded-xl font-bold transition-colors"
+                    className="px-8 py-4 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 disabled:opacity-50 rounded-2xl font-bold text-white shadow-2xl shadow-green-500/50 transition-all transform hover:scale-105 disabled:hover:scale-100"
                   >
-                    {loading ? 'Booking...' : 'Confirm Booking'}
+                    {loading ? 'Processing...' : 'Confirm Booking'}
                   </button>
                 </div>
               </div>
@@ -410,6 +526,37 @@ export default function App() {
           </>
         )}
       </main>
+
+      <style>{`
+        @keyframes blob {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          25% { transform: translate(20px, -50px) scale(1.1); }
+          50% { transform: translate(-20px, 20px) scale(0.9); }
+          75% { transform: translate(50px, 50px) scale(1.05); }
+        }
+        .animate-blob {
+          animation: blob 7s infinite;
+        }
+        .animation-delay-2000 {
+          animation-delay: 2s;
+        }
+        .animation-delay-4000 {
+          animation-delay: 4s;
+        }
+        @keyframes slide-in-right {
+          from {
+            transform: translateX(100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+        .animate-slide-in-right {
+          animation: slide-in-right 0.3s ease-out;
+        }
+      `}</style>
     </div>
   )
 }
