@@ -14,9 +14,9 @@ api.interceptors.request.use(config => {
 type Booking = {
   id: number
   showtime_id: number
-  total_price: number
+  total_amount: number
   status: string
-  seats: { id: number; row: string; number: number }[]
+  seat_ids: number[]
 }
 
 export default function MyBookings({ onBack }: { onBack: () => void }) {
@@ -24,7 +24,7 @@ export default function MyBookings({ onBack }: { onBack: () => void }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    api.get('/api/bookings/my-bookings')
+    api.get('/api/bookings/my')
       .then(r => setBookings(r.data))
       .finally(() => setLoading(false))
   }, [])
@@ -72,13 +72,13 @@ export default function MyBookings({ onBack }: { onBack: () => void }) {
                       Booking #{booking.id}
                     </h3>
                     <div className="space-y-1 text-sm text-gray-500">
-                      <p>Showtime #{booking.showtime_id} · {booking.seats.length} seat{booking.seats.length > 1 ? 's' : ''}</p>
-                      <p>Seats: {booking.seats.map(s => `${s.row}${s.number}`).join(', ')}</p>
+                      <p>Showtime #{booking.showtime_id} · {booking.seat_ids.length} seat{booking.seat_ids.length > 1 ? 's' : ''}</p>
+                      <p>Seat IDs: {booking.seat_ids.join(', ')}</p>
                     </div>
                   </div>
                   <div className="text-right ml-8">
                     <div className="text-2xl font-light text-gray-900 mb-2">
-                      ₹{booking.total_price}
+                      ₹{booking.total_amount}
                     </div>
                     <div className="inline-block px-3 py-1 bg-green-50 text-green-600 rounded-full text-xs font-medium">
                       {booking.status}
