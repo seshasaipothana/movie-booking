@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
 import axios from 'axios'
 
-const api = axios.create({
+const api = axios.create({ 
   baseURL: 'https://movie-booking-backend-8r8x.onrender.com'
 })
 
@@ -14,9 +14,9 @@ api.interceptors.request.use(config => {
 type Booking = {
   id: number
   showtime_id: number
+  total_price: number
   status: string
-  total_amount: number
-  seat_ids: number[]
+  seats: { id: number; row: string; number: number }[]
 }
 
 export default function MyBookings({ onBack }: { onBack: () => void }) {
@@ -24,59 +24,71 @@ export default function MyBookings({ onBack }: { onBack: () => void }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    api.get('/api/bookings/my')
+    api.get('/api/bookings/my-bookings')
       .then(r => setBookings(r.data))
       .finally(() => setLoading(false))
   }, [])
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      <header className="border-b border-gray-800 px-6 py-4 flex justify-between items-center">
-        <h1 className="text-xl font-bold">🎬 My Bookings</h1>
-        <button
-          onClick={onBack}
-          className="text-sm text-gray-400 hover:text-white border border-gray-700 px-4 py-2 rounded-lg"
-        >
-          ← Back
-        </button>
+    <div className="min-h-screen bg-white">
+      <header className="border-b border-gray-200 bg-white/80 backdrop-blur-xl sticky top-0 z-50">
+        <div className="max-w-6xl mx-auto px-6 py-5 flex justify-between items-center">
+          <h1 className="text-2xl font-light tracking-tight text-gray-900">
+            My Bookings
+          </h1>
+          <button
+            onClick={onBack}
+            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+          >
+            Back
+          </button>
+        </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-6 py-8">
-        {loading && <p className="text-gray-400">Loading...</p>}
-
-        {!loading && bookings.length === 0 && (
-          <p className="text-gray-400">No bookings yet.</p>
-        )}
-
-        <div className="grid gap-4">
-          {bookings.map(b => (
-            <div key={b.id} className="bg-gray-900 border border-gray-800 p-5 rounded-xl">
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="font-semibold text-white">Booking #{b.id}</p>
-                  <p className="text-gray-400 text-sm mt-1">
-                    Showtime #{b.showtime_id} &nbsp;·&nbsp; {b.seat_ids.length} seat(s)
-                  </p>
-                  <p className="text-gray-400 text-sm mt-1">
-                    Seats: {b.seat_ids.join(', ')}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-green-400 font-bold">₹{b.total_amount}</p>
-                  <span className={`text-xs px-2 py-1 rounded mt-2 inline-block ${
-                    b.status === 'confirmed'
-                      ? 'bg-green-900 text-green-300'
-                      : b.status === 'cancelled'
-                      ? 'bg-red-900 text-red-300'
-                      : 'bg-yellow-900 text-yellow-300'
-                  }`}>
-                    {b.status}
-                  </span>
+      <main className="max-w-6xl mx-auto px-6 py-16">
+        {loading ? (
+          <div className="space-y-4">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="bg-gray-50 p-8 rounded-2xl animate-pulse">
+                <div className="h-6 bg-gray-200 rounded w-1/4 mb-3"></div>
+                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+              </div>
+            ))}
+          </div>
+        ) : bookings.length === 0 ? (
+          <div className="text-center py-24">
+            <p className="text-gray-400 text-lg">No bookings yet</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {bookings.map(booking => (
+              <div
+                key={booking.id}
+                className="bg-gray-50 p-8 rounded-2xl"
+              >
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <h3 className="text-xl font-light tracking-tight text-gray-900 mb-3">
+                      Booking #{booking.id}
+                    </h3>
+                    <div className="space-y-1 text-sm text-gray-500">
+                      <p>Showtime #{booking.showtime_id} · {booking.seats.length} seat{booking.seats.length > 1 ? 's' : ''}</p>
+                      <p>Seats: {booking.seats.map(s => `${s.row}${s.number}`).join(', ')}</p>
+                    </div>
+                  </div>
+                  <div className="text-right ml-8">
+                    <div className="text-2xl font-light text-gray-900 mb-2">
+                      ₹{booking.total_price}
+                    </div>
+                    <div className="inline-block px-3 py-1 bg-green-50 text-green-600 rounded-full text-xs font-medium">
+                      {booking.status}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </main>
     </div>
   )
