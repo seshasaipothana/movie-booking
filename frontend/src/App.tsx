@@ -26,6 +26,7 @@ export default function App() {
   const [showtimes, setShowtimes] = useState<Showtime[]>([])
   const [seats, setSeats] = useState<Seat[]>([])
   const [bookedSeatIds, setBookedSeatIds] = useState<number[]>([])
+  const [lockedSeatIds, setLockedSeatIds] = useState<number[]>([])
   const [selectedShowtime, setSelectedShowtime] = useState<Showtime | null>(null)
   const [selectedSeats, setSelectedSeats] = useState<number[]>([])
   const [message, setMessage] = useState('')
@@ -39,6 +40,17 @@ export default function App() {
       api.get('/api/showtimes').then(r => setShowtimes(r.data))
     }
   }, [token])
+
+  // Unlock all selected seats when leaving the showtime page
+  useEffect(() => {
+    return () => {
+      if (selectedShowtime && selectedSeats.length > 0) {
+        selectedSeats.forEach(seatId => {
+          api.post(`/api/seat-locks/${selectedShowtime.id}/${seatId}/unlock`).catch(() => {})
+        })
+      }
+    }
+  }, [selectedShowtime, selectedSeats])
 
   function showMsg(text: string, type: 'success' | 'error' = 'success') {
     setMessage(text)
@@ -65,19 +77,43 @@ export default function App() {
     setSelectedShowtime(showtime)
     setSelectedSeats([])
     setMessage('')
-    const [seatsRes, bookedRes] = await Promise.all([
+    const [seatsRes, bookedRes, lockedRes] = await Promise.all([
       api.get(`/api/showtimes/${showtime.id}/seats`),
       api.get(`/api/showtimes/${showtime.id}/booked-seats`),
+      api.get(`/api/seat-locks/${showtime.id}/locked-seats`),
     ])
     setSeats(seatsRes.data)
     setBookedSeatIds(bookedRes.data)
+    setLockedSeatIds(lockedRes.data)
   }
 
-  function toggleSeat(id: number) {
+  async function toggleSeat(id: number) {
     if (bookedSeatIds.includes(id)) return
-    setSelectedSeats(prev =>
-      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
-    )
+    if (lockedSeatIds.includes(id) && !selectedSeats.includes(id)) {
+      showMsg('Seat is temporarily held by another user', 'error')
+      return
+    }
+
+    const isCurrentlySelected = selectedSeats.includes(id)
+    
+    if (!selectedShowtime) return
+
+    try {
+      if (isCurrentlySelected) {
+        // Unlock the seat
+        await api.post(`/api/seat-locks/${selectedShowtime.id}/${id}/unlock`)
+        setSelectedSeats(prev => prev.filter(s => s !== id))
+        setLockedSeatIds(prev => prev.filter(s => s !== id))
+      } else {
+        // Lock the seat
+        await api.post(`/api/seat-locks/${selectedShowtime.id}/${id}/lock`)
+        setSelectedSeats(prev => [...prev, id])
+        setLockedSeatIds(prev => [...prev, id])
+      }
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      showMsg(msg || 'Failed to select seat', 'error')
+    }
   }
 
   async function book() {
@@ -89,8 +125,20 @@ export default function App() {
         seat_ids: selectedSeats,
       })
       showMsg(`✅ Booked ${selectedSeats.length} seat(s)! Total: ₹${selectedSeats.length * selectedShowtime.price}`)
-      const bookedRes = await api.get(`/api/showtimes/${selectedShowtime.id}/booked-seats`)
+      
+      // Unlock all seats after successful booking
+      await Promise.all(
+        selectedSeats.map(seatId =>
+          api.post(`/api/seat-locks/${selectedShowtime.id}/${seatId}/unlock`)
+        )
+      )
+      
+      const [bookedRes, lockedRes] = await Promise.all([
+        api.get(`/api/showtimes/${selectedShowtime.id}/booked-seats`),
+        api.get(`/api/seat-locks/${selectedShowtime.id}/locked-seats`),
+      ])
       setBookedSeatIds(bookedRes.data)
+      setLockedSeatIds(lockedRes.data)
       setSelectedSeats([])
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
@@ -263,6 +311,9 @@ export default function App() {
                 <span className="w-4 h-4 rounded bg-blue-600 inline-block" /> Selected
               </span>
               <span className="flex items-center gap-1">
+                <span className="w-4 h-4 rounded bg-yellow-600 inline-block" /> Held
+              </span>
+              <span className="flex items-center gap-1">
                 <span className="w-4 h-4 rounded bg-gray-600 opacity-40 inline-block" /> Booked
               </span>
             </div>
@@ -270,14 +321,17 @@ export default function App() {
               {seats.map(seat => {
                 const isBooked = bookedSeatIds.includes(seat.id)
                 const isSelected = selectedSeats.includes(seat.id)
+                const isLocked = lockedSeatIds.includes(seat.id) && !isSelected
                 return (
                   <button
                     key={seat.id}
                     onClick={() => toggleSeat(seat.id)}
-                    disabled={isBooked}
+                    disabled={isBooked || isLocked}
                     className={`py-2 rounded text-xs font-semibold transition-colors ${
                       isBooked
                         ? 'bg-gray-700 text-gray-600 cursor-not-allowed opacity-40'
+                        : isLocked
+                        ? 'bg-yellow-600 text-yellow-200 cursor-not-allowed'
                         : isSelected
                         ? 'bg-blue-600 text-white'
                         : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
