@@ -41,6 +41,32 @@ export default function App() {
     }
   }, [token])
 
+  // WebSocket connection for real-time seat updates
+  useEffect(() => {
+    if (!selectedShowtime) return
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const wsUrl = `${protocol}//movie-booking-backend-8r8x.onrender.com/ws/showtimes/${selectedShowtime.id}`
+    const ws = new WebSocket(wsUrl)
+
+    ws.onmessage = (event) => {
+      const message = JSON.parse(event.data)
+      
+      if (message.type === 'seat_locked') {
+        setLockedSeatIds(prev => [...prev, message.seat_id])
+      } else if (message.type === 'seat_unlocked') {
+        setLockedSeatIds(prev => prev.filter(id => id !== message.seat_id))
+      } else if (message.type === 'seat_booked') {
+        setBookedSeatIds(prev => [...prev, message.seat_id])
+        setLockedSeatIds(prev => prev.filter(id => id !== message.seat_id))
+      }
+    }
+
+    return () => {
+      ws.close()
+    }
+  }, [selectedShowtime])
+
   // Unlock all selected seats when leaving the showtime page
   useEffect(() => {
     return () => {
@@ -87,6 +113,19 @@ export default function App() {
     setLockedSeatIds(lockedRes.data)
   }
 
+  function broadcastSeatUpdate(message: { type: string; seat_id: number }) {
+    if (!selectedShowtime) return
+    
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const wsUrl = `${protocol}//movie-booking-backend-8r8x.onrender.com/ws/showtimes/${selectedShowtime.id}`
+    const ws = new WebSocket(wsUrl)
+    
+    ws.onopen = () => {
+      ws.send(JSON.stringify(message))
+      ws.close()
+    }
+  }
+
   async function toggleSeat(id: number) {
     if (bookedSeatIds.includes(id)) return
     if (lockedSeatIds.includes(id) && !selectedSeats.includes(id)) {
@@ -104,11 +143,17 @@ export default function App() {
         await api.post(`/api/seat-locks/${selectedShowtime.id}/${id}/unlock`)
         setSelectedSeats(prev => prev.filter(s => s !== id))
         setLockedSeatIds(prev => prev.filter(s => s !== id))
+        
+        // Broadcast unlock via WebSocket
+        broadcastSeatUpdate({ type: 'seat_unlocked', seat_id: id })
       } else {
         // Lock the seat
         await api.post(`/api/seat-locks/${selectedShowtime.id}/${id}/lock`)
         setSelectedSeats(prev => [...prev, id])
         setLockedSeatIds(prev => [...prev, id])
+        
+        // Broadcast lock via WebSocket
+        broadcastSeatUpdate({ type: 'seat_locked', seat_id: id })
       }
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
@@ -126,11 +171,12 @@ export default function App() {
       })
       showMsg(`✅ Booked ${selectedSeats.length} seat(s)! Total: ₹${selectedSeats.length * selectedShowtime.price}`)
       
-      // Unlock all seats after successful booking
+      // Unlock all seats and broadcast booking
       await Promise.all(
-        selectedSeats.map(seatId =>
-          api.post(`/api/seat-locks/${selectedShowtime.id}/${seatId}/unlock`)
-        )
+        selectedSeats.map(seatId => {
+          broadcastSeatUpdate({ type: 'seat_booked', seat_id: seatId })
+          return api.post(`/api/seat-locks/${selectedShowtime.id}/${seatId}/unlock`)
+        })
       )
       
       const [bookedRes, lockedRes] = await Promise.all([
