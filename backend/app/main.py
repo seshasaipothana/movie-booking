@@ -2,6 +2,8 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+from app.scheduler import start_scheduler
 
 from app.api.auth import router as auth_router
 from app.api.bookings import router as bookings_router
@@ -10,10 +12,16 @@ from app.api.movies import router as movies_router
 from app.api.seat_locks import router as seat_locks_router
 from app.api.websockets import router as websockets_router
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    start_scheduler()
+    yield
+
 app = FastAPI(
     title="Movie Booking API",
     description="Real-time movie ticket booking backend.",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
