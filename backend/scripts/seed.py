@@ -7,11 +7,13 @@ Run from the backend folder:
 import asyncio
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from app.db.session import AsyncSessionLocal
-from app.models import Cinema, Movie, Screen, Seat, Showtime
+from app.models import Cinema, Movie, Screen, Seat, Showtime, Booking
+
 
 async def seed():
+    print("seed() started")
     async with AsyncSessionLocal() as session:
 
         # --- CINEMAS ---
@@ -30,17 +32,15 @@ async def seed():
         ]
 
         # --- SCREENS per cinema ---
-        # PVR gets 2 screens, INOX gets 1
         screens_data = {
             "PVR Forum Mall": ["Screen 1", "Screen 2"],
             "INOX Garuda": ["Screen 1"],
-        } 
-# --- INSERT CINEMAS (skip if already exist) ---
+        }
+
+        # --- INSERT CINEMAS ---
         cinema_objs = {}
         for c in cinemas_data:
-            existing = await session.execute(
-                select(Cinema).where(Cinema.name == c["name"])
-            )
+            existing = await session.execute(select(Cinema).where(Cinema.name == c["name"]))
             obj = existing.scalar_one_or_none()
             if not obj:
                 obj = Cinema(**c)
@@ -51,9 +51,7 @@ async def seed():
         # --- INSERT MOVIES ---
         movie_objs = []
         for m in movies_data:
-            existing = await session.execute(
-                select(Movie).where(Movie.title == m["title"])
-            )
+            existing = await session.execute(select(Movie).where(Movie.title == m["title"]))
             obj = existing.scalar_one_or_none()
             if not obj:
                 obj = Movie(**m)
@@ -79,7 +77,7 @@ async def seed():
                     await session.flush()
                 screen_objs.append(obj)
 
-        # --- INSERT SEATS (rows A-F, numbers 1-10 per screen) ---
+        # --- INSERT SEATS ---
         for screen in screen_objs:
             for row in "ABCDEF":
                 for number in range(1, 11):
@@ -95,38 +93,30 @@ async def seed():
 
         await session.flush()
 
-        # --- INSERT SHOWTIMES (20 across next 7 days) ---
+        # --- INSERT SHOWTIMES (next 7 days, all screens) ---
         now = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-        show_times = [10, 13, 16, 19, 22]  # hours: 10am, 1pm, 4pm, 7pm, 10pm
+        show_times = [10, 13, 16, 19, 22]
         prices = [Decimal("150.00"), Decimal("200.00"), Decimal("250.00")]
-        count = 0
 
+        from app.models import Booking
+        await session.execute(delete(Booking))
+        await session.execute(delete(Showtime))
+        await session.flush()
+
+        count = 0
         for day_offset in range(7):
             day = now + timedelta(days=day_offset)
             for screen in screen_objs:
-                for hour in show_times:
-                    if count >= 20:
-                        break
+                for i, hour in enumerate(show_times):
                     movie = movie_objs[count % len(movie_objs)]
                     start = day.replace(hour=hour)
-                    existing = await session.execute(
-                        select(Showtime).where(
-                            Showtime.screen_id == screen.id,
-                            Showtime.start_time == start,
-                        )
-                    )
-                    if not existing.scalar_one_or_none():
-                        session.add(Showtime(
-                            movie_id=movie.id,
-                            screen_id=screen.id,
-                            start_time=start,
-                            price=prices[count % len(prices)],
-                        ))
-                        count += 1
-                if count >= 20:
-                    break
-            if count >= 20:
-                break
+                    session.add(Showtime(
+                        movie_id=movie.id,
+                        screen_id=screen.id,
+                        start_time=start,
+                        price=prices[i % len(prices)],
+                    ))
+                    count += 1
 
         await session.commit()
         print(f"Seeded: {len(cinema_objs)} cinemas, {len(movie_objs)} movies, "
