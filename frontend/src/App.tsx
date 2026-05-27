@@ -3,7 +3,7 @@ import axios from 'axios'
 import MyBookings from './MyBookings'
 
 const api = axios.create({ 
-  baseURL: 'https://movie-booking-backend-8r8x.onrender.com'
+  baseURL: 'https://movie-booking-sesh.duckdns.org'
 })
 
 api.interceptors.request.use(config => {
