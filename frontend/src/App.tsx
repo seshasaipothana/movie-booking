@@ -34,20 +34,19 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [showMyBookings, setShowMyBookings] = useState(false)
   const [dataLoading, setDataLoading] = useState(false)
+  const [showAuthModal, setShowAuthModal] = useState(false)
 
   useEffect(() => {
-    if (token) {
-      setDataLoading(true)
-      Promise.all([
-        api.get('/api/movies'),
-        api.get('/api/showtimes')
-      ]).then(([moviesRes, showtimesRes]) => {
-        setMovies(moviesRes.data)
-        setShowtimes(showtimesRes.data)
-        setDataLoading(false)
-      })
-    }
-  }, [token])
+    setDataLoading(true)
+    Promise.all([
+      api.get('/api/movies'),
+      api.get('/api/showtimes')
+    ]).then(([moviesRes, showtimesRes]) => {
+      setMovies(moviesRes.data)
+      setShowtimes(showtimesRes.data)
+      setDataLoading(false)
+    })
+  }, [])
 
   useEffect(() => {
     if (!selectedShowtime) return
@@ -145,17 +144,17 @@ export default function App() {
     
     if (!selectedShowtime) return
 
-    try {
+   try {
       if (isCurrentlySelected) {
-        await api.post(`/api/seat-locks/${selectedShowtime.id}/${id}/unlock`)
+        if (token) await api.post(`/api/seat-locks/${selectedShowtime.id}/${id}/unlock`)
         setSelectedSeats(prev => prev.filter(s => s !== id))
         setLockedSeatIds(prev => prev.filter(s => s !== id))
-        broadcastSeatUpdate({ type: 'seat_unlocked', seat_id: id })
+        if (token) broadcastSeatUpdate({ type: 'seat_unlocked', seat_id: id })
       } else {
-        await api.post(`/api/seat-locks/${selectedShowtime.id}/${id}/lock`)
+        if (token) await api.post(`/api/seat-locks/${selectedShowtime.id}/${id}/lock`)
         setSelectedSeats(prev => [...prev, id])
         setLockedSeatIds(prev => [...prev, id])
-        broadcastSeatUpdate({ type: 'seat_locked', seat_id: id })
+        if (token) broadcastSeatUpdate({ type: 'seat_locked', seat_id: id })
       }
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
@@ -165,6 +164,7 @@ export default function App() {
 
   async function book() {
     if (!selectedShowtime || selectedSeats.length === 0) return
+    if (!token) { setShowAuthModal(true); return }
     setLoading(true)
     try {
       await api.post('/api/bookings', {
@@ -217,71 +217,6 @@ export default function App() {
       minute: '2-digit',
     })
   }
-
-  if (!token) return (
-    <div className="min-h-screen bg-white flex items-center justify-center p-6">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-light tracking-tight text-gray-900 mb-2">
-            Cinema
-          </h1>
-          <p className="text-sm text-gray-500">
-            {isLogin ? 'Sign in to continue' : 'Create your account'}
-          </p>
-        </div>
-
-        <div className="space-y-4">
-          {!isLogin && (
-            <input
-              className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-gray-900 placeholder-gray-400 transition-all"
-              placeholder="Full name"
-              value={name}
-              onChange={e => setName(e.target.value)}
-            />
-          )}
-          <input
-            className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-gray-900 placeholder-gray-400 transition-all"
-            placeholder="Email"
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-          />
-          <input
-            className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-gray-900 placeholder-gray-400 transition-all"
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleAuth()}
-          />
-          <button
-            onClick={handleAuth}
-            disabled={loading}
-            className="w-full bg-gray-900 hover:bg-gray-800 disabled:opacity-40 text-white py-3.5 rounded-xl font-medium transition-all"
-          >
-            {loading ? 'Please wait...' : isLogin ? 'Sign In' : 'Create Account'}
-          </button>
-        </div>
-
-        <p
-          className="text-center text-sm text-gray-500 mt-8 cursor-pointer hover:text-gray-900 transition-colors"
-          onClick={() => setIsLogin(!isLogin)}
-        >
-          {isLogin ? "Don't have an account?" : 'Already have an account?'}
-        </p>
-
-        {message && (
-          <div className={`mt-6 p-3 rounded-xl text-center text-sm ${
-            messageType === 'error' 
-              ? 'bg-red-50 text-red-600' 
-              : 'bg-gray-50 text-gray-900'
-          }`}>
-            {message}
-          </div>
-        )}
-      </div>
-    </div>
-  )
 
   if (showMyBookings) return <MyBookings onBack={() => setShowMyBookings(false)} />
 
@@ -512,6 +447,61 @@ export default function App() {
           </>
         )}
       </main>
+      {showAuthModal && (
+  <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
+    <div className="bg-white rounded-2xl p-8 w-full max-w-sm">
+      <h2 className="text-2xl font-light text-gray-900 mb-2">Sign in to book</h2>
+      <p className="text-sm text-gray-500 mb-6">Create an account or sign in to continue</p>
+      <div className="space-y-4">
+        {!isLogin && (
+          <input
+            className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 text-gray-900 placeholder-gray-400"
+            placeholder="Full name"
+            value={name}
+            onChange={e => setName(e.target.value)}
+          />
+        )}
+        <input
+          className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 text-gray-900 placeholder-gray-400"
+          placeholder="Email"
+          type="email"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+        />
+        <input
+          className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 text-gray-900 placeholder-gray-400"
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+        />
+        <button
+          onClick={async () => {
+            await handleAuth()
+            setShowAuthModal(false)
+            book()
+          }}
+          disabled={loading}
+          className="w-full bg-gray-900 hover:bg-gray-800 disabled:opacity-40 text-white py-3.5 rounded-xl font-medium transition-all"
+        >
+          {loading ? 'Please wait...' : isLogin ? 'Sign In & Book' : 'Create Account & Book'}
+        </button>
+      </div>
+      <p
+        className="text-center text-sm text-gray-500 mt-6 cursor-pointer hover:text-gray-900"
+        onClick={() => setIsLogin(!isLogin)}
+      >
+        {isLogin ? "Don't have an account?" : 'Already have an account?'}
+      </p>
+      <button
+        onClick={() => setShowAuthModal(false)}
+        className="absolute top-4 right-4 text-gray-400 hover:text-gray-900"
+      >
+        ✕
+      </button>
+    </div>
+  </div>
+)}
 
       <style>{`
         @keyframes slide-in-right {
