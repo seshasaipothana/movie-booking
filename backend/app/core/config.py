@@ -15,6 +15,8 @@ class Settings(BaseSettings):
 
     # Redis
     redis_url: str
+    # TMDB
+    tmdb_read_access_token: str = ""
 
     # App
     app_env: str = "development"

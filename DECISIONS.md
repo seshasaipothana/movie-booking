@@ -120,3 +120,28 @@ Each entry: what we chose, what we rejected, why.
 **Rejected:** Putting the FK on the "one" side (e.g., `cinemas.screen_id`).
 
 **Why:** The "one" side can only hold a single reference per row. If `cinemas` held `screen_id`, a cinema with two screens would have to be duplicated across two rows — breaking the "one row per entity" rule and causing update anomalies (renaming a cinema would require updating N rows). Putting the FK on the "many" side means each child row points at its single parent, and the parent table stays clean — one row per real entity.
+
+## Seed script — delete order matters
+Decided: delete Bookings before Showtimes in seed script.
+Rejected: deleting Showtimes first (breaks FK constraint from bookings table).
+Why: Postgres enforces foreign key constraints — child rows must be deleted before parent rows.
+
+## Cron job approach — APScheduler vs Render Crons
+Decided: APScheduler inside FastAPI.
+Rejected: Render's separate cron service.
+Why: simpler for now — no extra service, no extra cost. 
+Downside: if the app crashes, cron stops too. Acceptable for portfolio stage.
+
+## Cron job location — inside FastAPI vs separate service
+Decided: APScheduler inside FastAPI lifespan.
+Rejected: Render cron service.
+Why: simpler, no extra cost, sufficient for portfolio stage.
+Tradeoff: cron stops if app crashes.
+
+Redis: moved from Render (external, blocked EC2) to local EC2 install.
+HTTPS: used DuckDNS free subdomain + Let's Encrypt certbot instead of paying for a domain.
+Frontend: S3 + CloudFront instead of Vercel — AWS experience for portfolio.
+
+
+MyBookings.tsx had its own axios instance pointing to old Render URL.
+Lesson: when there are multiple axios instances in a project, update all of them when changing backend URL.

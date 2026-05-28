@@ -12,7 +12,7 @@ api.interceptors.request.use(config => {
   return config
 })
 
-type Movie = { id: number; title: string; duration_minutes: number }
+type Movie = { id: number; title: string; duration_minutes: number ; poster_url: string | null }
 type Showtime = { id: number; movie_id: number; start_time: string; price: number; screen_id: number }
 type Seat = { id: number; row: string; number: number }
 
@@ -348,37 +348,42 @@ export default function App() {
                 <p className="text-gray-400 text-lg">No showtimes available</p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {showtimes.map(s => {
-                  const movie = getMovie(s.movie_id)
-                  return (
-                    <div
-                      key={s.id}
-                      onClick={() => loadSeats(s)}
-                      className="group cursor-pointer bg-gray-50 hover:bg-gray-100 p-8 rounded-2xl transition-all"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <h3 className="text-2xl font-light tracking-tight text-gray-900 mb-3">
-                            {movie?.title}
-                          </h3>
-                          <div className="flex items-center gap-6 text-sm text-gray-500">
-                            <span>{formatTime(s.start_time)}</span>
-                            <span>Screen {s.screen_id}</span>
-                            <span>{movie?.duration_minutes} min</span>
-                          </div>
-                        </div>
-                        <div className="text-right ml-8">
-                          <div className="text-3xl font-light text-gray-900">
-                            ₹{s.price}
-                          </div>
-                          <p className="text-sm text-gray-400 mt-1">per seat</p>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+  {movies.slice(0, 10).map(movie => {
+    const movieShowtimes = showtimes.filter(s => s.movie_id === movie.id)
+    if (movieShowtimes.length === 0) return null
+    return (
+      <div key={movie.id} className="group">
+        <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-gray-100 mb-3">
+          {movie.poster_url ? (
+            <img
+              src={movie.poster_url}
+              alt={movie.title}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">
+              No poster
+            </div>
+          )}
+        </div>
+        <h3 className="text-sm font-medium text-gray-900 mb-2 truncate">{movie.title}</h3>
+        <p className="text-xs text-gray-400 mb-3">{movie.duration_minutes} min</p>
+        <div className="space-y-1">
+          {movieShowtimes.slice(0, 3).map(s => (
+            <button
+              key={s.id}
+              onClick={() => loadSeats(s)}
+              className="w-full text-xs py-1.5 px-3 bg-gray-100 hover:bg-gray-900 hover:text-white rounded-lg transition-all text-gray-600"
+            >
+              {new Date(s.start_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  })}
+</div>
             )}
           </>
         )}
