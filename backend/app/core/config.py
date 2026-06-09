@@ -15,8 +15,12 @@ class Settings(BaseSettings):
 
     # Redis
     redis_url: str
+    
     # TMDB
     tmdb_read_access_token: str = ""
+
+    # Groq (NEW - replaces anthropic_api_key)
+    groq_api_key: str
 
     # App
     app_env: str = "development"
