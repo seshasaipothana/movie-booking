@@ -1,16 +1,15 @@
 """FastAPI application entry point."""
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.scheduler import start_scheduler
-
 from app.api.auth import router as auth_router
 from app.api.bookings import router as bookings_router
 from app.api.health import router as health_router
 from app.api.movies import router as movies_router
 from app.api.seat_locks import router as seat_locks_router
 from app.api.websockets import router as websockets_router
+from app.api.chat import router as chat_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -38,3 +37,4 @@ app.include_router(movies_router)
 app.include_router(bookings_router)
 app.include_router(seat_locks_router)
 app.include_router(websockets_router)
+app.include_router(chat_router)
