@@ -3,9 +3,8 @@ import axios from 'axios'
 import MyBookings from './MyBookings'
 
 const api = axios.create({ 
-  baseURL: 'https://movie-booking-sesh.duckdns.org'
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000'
 })
-
 api.interceptors.request.use(config => {
   const token = localStorage.getItem('token')
   if (token) config.headers.Authorization = `Bearer ${token}`
@@ -35,6 +34,7 @@ export default function App() {
   const [showMyBookings, setShowMyBookings] = useState(false)
   const [dataLoading, setDataLoading] = useState(false)
   const [showAuthModal, setShowAuthModal] = useState(false)
+  const [userName, setUserName] = useState(localStorage.getItem('userName') || '')
 
   useEffect(() => {
     setDataLoading(true)
@@ -90,19 +90,22 @@ export default function App() {
   }
 
   async function handleAuth() {
-    setLoading(true)
-    try {
-      const url = isLogin ? '/api/auth/login' : '/api/auth/signup'
-      const body = isLogin ? { email, password } : { email, password, name }
-      const r = await api.post(url, body)
-      localStorage.setItem('token', r.data.access_token)
-      setToken(r.data.access_token)
-    } catch {
-      showMsg(isLogin ? 'Invalid credentials' : 'Sign up failed', 'error')
-    } finally {
-      setLoading(false)
-    }
+  setLoading(true)
+  try {
+    const url = isLogin ? '/api/auth/login' : '/api/auth/signup'
+    const body = isLogin ? { email, password } : { email, password, name }
+    const r = await api.post(url, body)
+    localStorage.setItem('token', r.data.access_token)
+    const displayName = isLogin ? email.split('@')[0] : name
+    localStorage.setItem('userName', displayName)
+    setUserName(displayName)
+    setToken(r.data.access_token)
+  } catch {
+    showMsg(isLogin ? 'Invalid credentials' : 'Sign up failed', 'error')
+  } finally {
+    setLoading(false)
   }
+}
 
   async function loadSeats(showtime: Showtime) {
     setSelectedShowtime(showtime)
@@ -196,12 +199,21 @@ export default function App() {
   }
 
   function logout() {
-    localStorage.removeItem('token')
-    setToken('')
-    setMovies([])
-    setShowtimes([])
-    setSelectedShowtime(null)
-    setShowMyBookings(false)
+  localStorage.removeItem('token')
+  localStorage.removeItem('userName')
+  setToken('')
+  setUserName('')
+  setSelectedShowtime(null)
+  setShowMyBookings(false)
+  setDataLoading(true)
+  Promise.all([
+    api.get('/api/movies'),
+    api.get('/api/showtimes')
+  ]).then(([moviesRes, showtimesRes]) => {
+    setMovies(moviesRes.data)
+    setShowtimes(showtimesRes.data)
+    setDataLoading(false)
+  })
   }
 
   function getMovie(id: number) {
@@ -223,29 +235,43 @@ export default function App() {
   return (
     <div className="min-h-screen bg-white">
       <header className="border-b border-gray-200 bg-white/80 backdrop-blur-xl sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-6 py-5 flex justify-between items-center">
-          <h1
-            className="text-2xl font-light tracking-tight text-gray-900 cursor-pointer"
-            onClick={() => { setSelectedShowtime(null); setMessage('') }}
+  <div className="max-w-6xl mx-auto px-6 py-5 flex justify-between items-center">
+    <h1
+      className="text-2xl font-light tracking-tight text-gray-900 cursor-pointer"
+      onClick={() => { setSelectedShowtime(null); setShowMyBookings(false); setMessage('') }}
+    >
+      Cinema
+    </h1>
+    <div className="flex items-center gap-3">
+      {token ? (
+        <>
+          {userName && (
+            <span className="text-sm text-gray-500">Hi, {userName}</span>
+          )}
+          <button
+            onClick={() => { setShowMyBookings(true); setSelectedShowtime(null) }}
+            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
           >
-            Cinema
-          </h1>
-          <div className="flex gap-3">
-            <button
-              onClick={() => setShowMyBookings(true)}
-              className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
-            >
-              My Bookings
-            </button>
-            <button
-              onClick={logout}
-              className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
-            >
-              Sign Out
-            </button>
-          </div>
-        </div>
-      </header>
+            My Bookings
+          </button>
+          <button
+            onClick={logout}
+            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+          >
+            Sign Out
+          </button>
+        </>
+      ) : (
+        <button
+          onClick={() => setShowAuthModal(true)}
+          className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+        >
+          Sign In
+        </button>
+      )}
+    </div>
+  </div>
+</header>
 
       {message && (
         <div className="fixed top-24 right-6 z-50 animate-slide-in-right">
@@ -284,7 +310,11 @@ export default function App() {
               </div>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
-  {movies.slice(0, 10).map(movie => {
+  {[...movies].sort((a, b) => {
+  const seed = new Date().toDateString()
+  const hash = (s: string, id: number) => [...s].reduce((acc, c) => acc + c.charCodeAt(0), id)
+  return hash(seed, a.id) - hash(seed, b.id)
+}).slice(0, 10).map(movie => {
     const movieShowtimes = showtimes.filter(s => s.movie_id === movie.id)
     if (movieShowtimes.length === 0) return null
     return (
@@ -389,7 +419,8 @@ export default function App() {
             )}
 
             {dataLoading ? (
-              <div className="grid grid-cols-10 gap-2.5 mb-12">
+              <div className="grid grid-cols-10 gap-1.5 mb-12 max-w-lg mx-auto">
+              
                 {Array.from({ length: 60 }).map((_, i) => (
                   <div key={i} className="aspect-square rounded-lg bg-gray-100 animate-pulse"></div>
                 ))}
@@ -406,7 +437,7 @@ export default function App() {
                       onClick={() => toggleSeat(seat.id)}
                       disabled={isBooked || isLocked}
                       title={isBooked ? 'Booked' : isLocked ? 'Held' : isSelected ? 'Selected' : 'Available'}
-                      className={`aspect-square rounded-lg text-xs font-medium transition-all ${
+                      className={`w-10 h-10 rounded-md text-xs font-medium transition-all ${
                         isBooked
                           ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                           : isLocked
@@ -450,7 +481,9 @@ export default function App() {
       {showAuthModal && (
   <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
     <div className="bg-white rounded-2xl p-8 w-full max-w-sm">
-      <h2 className="text-2xl font-light text-gray-900 mb-2">Sign in to book</h2>
+     <h2 className="text-2xl font-light text-gray-900 mb-2">
+  {selectedShowtime ? 'Sign in to book' : 'Sign in'}
+</h2>
       <p className="text-sm text-gray-500 mb-6">Create an account or sign in to continue</p>
       <div className="space-y-4">
         {!isLogin && (
@@ -484,7 +517,7 @@ export default function App() {
           disabled={loading}
           className="w-full bg-gray-900 hover:bg-gray-800 disabled:opacity-40 text-white py-3.5 rounded-xl font-medium transition-all"
         >
-          {loading ? 'Please wait...' : isLogin ? 'Sign In & Book' : 'Create Account & Book'}
+          {loading ? 'Please wait...' : isLogin ? (selectedShowtime ? 'Sign In & Book' : 'Sign In') : (selectedShowtime ? 'Create Account & Book' : 'Create Account')}
         </button>
       </div>
       <p
