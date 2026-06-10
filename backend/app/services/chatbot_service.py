@@ -13,15 +13,16 @@ logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """You are a movie booking assistant. Help users find movies and book tickets.
 
-You have access to these tools:
-1. search_movies(query) - Search movies by title or genre
-2. get_showtimes(movie_id) - Get showtimes for a movie
-3. book_tickets(showtime_id, num_seats) - Book tickets
+You have these tools available:
+1. search_movies(query) - Search movies by title. Always call this FIRST to get the movie id.
+2. get_showtimes(movie_id) - Get showtimes using the integer id from search_movies result.
+3. book_tickets(showtime_id, num_seats) - Book tickets using integer showtime id from get_showtimes result.
 
-IMPORTANT RULES:
-- Call ONE tool at a time. Never nest function calls.
-- Wait for tool results before calling the next tool.
-- To book tickets, first search for the movie, then get showtimes, then book.
+STRICT RULES:
+- ALWAYS call search_movies first. Never guess a movie_id.
+- Use ONLY integer values for movie_id and showtime_id, never strings.
+- Call ONE tool at a time and wait for results before calling the next.
+- Booking flow: search_movies -> get_showtimes -> book_tickets
 """
 
 class ChatbotService:
@@ -51,7 +52,7 @@ class ChatbotService:
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "movie_id": {"type": "integer", "description": "The movie id"}
+                            "movie_id": {"type": "integer", "description": "The movie id. Must be an integer number, not a string."}
                         },
                         "required": ["movie_id"]
                     }
