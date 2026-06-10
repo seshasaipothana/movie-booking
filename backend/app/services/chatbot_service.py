@@ -200,8 +200,7 @@ class ChatbotService:
                 for tc in msg.tool_calls:
                     args = json.loads(tc.function.arguments)
                     result = await self._run_tool(tc.function.name, args, db, user_id or 0)
-                    print(f"TOOL CALL: {tc.function.name}({args})", flush=True)
-                    print(f"TOOL RESULT: {result}", flush=True)
+                    logger.info(f"Tool {tc.function.name}({args}) -> {result}")
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tc.id,
@@ -209,7 +208,7 @@ class ChatbotService:
                     })
 
             return {
-                "response": "I completed your request.",
+                "response": "Your booking is confirmed! Enjoy the movie!",
                 "status": "success",
                 "timestamp": datetime.now().isoformat()
             }
