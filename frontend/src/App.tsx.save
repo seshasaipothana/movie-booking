@@ -1,17 +1,14 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import MyBookings from './MyBookings'
-import Chat from './Chat'
 
-const api = axios.create({ 
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000'
-})
+const api = axios.create({   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000'})
 api.interceptors.request.use(config => {
   const token = localStorage.getItem('token')
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
-
+x
 type Movie = { id: number; title: string; duration_minutes: number ; poster_url: string | null }
 type Showtime = { id: number; movie_id: number; start_time: string; price: number; screen_id: number }
 type Seat = { id: number; row: string; number: number }
@@ -35,7 +32,6 @@ export default function App() {
   const [showMyBookings, setShowMyBookings] = useState(false)
   const [dataLoading, setDataLoading] = useState(false)
   const [showAuthModal, setShowAuthModal] = useState(false)
-  const [showChat, setShowChat] = useState(false)
   const [userName, setUserName] = useState(localStorage.getItem('userName') || '')
 
   useEffect(() => {
@@ -254,7 +250,6 @@ export default function App() {
             onClick={() => { setShowMyBookings(true); setSelectedShowtime(null) }}
             className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
           >
-            <button onClick={() => setShowChat(!showChat)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors">💬 Ask AI</button>
             My Bookings
           </button>
           <button
@@ -480,7 +475,6 @@ export default function App() {
             )}
           </>
         )}
-        {showChat && <Chat onClose={() => setShowChat(false)} />}
       </main>
       {showAuthModal && (
   <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">

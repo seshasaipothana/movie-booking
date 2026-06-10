@@ -23,7 +23,6 @@ async def fetch_popular_movies(pages: int = 5) -> list[dict]:
                 params={"language": "en-US", "page": page},
             )
             for m in r.json()["results"]:
-                # Get full details for runtime
                 detail = await client.get(
                     f"{TMDB_BASE}/movie/{m['id']}",
                     headers=HEADERS,
@@ -40,7 +39,7 @@ async def fetch_popular_movies(pages: int = 5) -> list[dict]:
 
 async def seed():
     print("Fetching movies from TMDB...")
-    movies = await fetch_popular_movies(pages=5)  # 5 pages = ~100 movies
+    movies = await fetch_popular_movies(pages=5)
     print(f"Fetched {len(movies)} movies")
 
     async with AsyncSessionLocal() as session:
@@ -56,5 +55,32 @@ async def seed():
         print(f"Added {added} new movies to DB")
 
 
+async def fix_missing_posters():
+    print("Fixing movies with missing posters...")
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(Movie).where(Movie.poster_url == None)
+        )
+        movies = result.scalars().all()
+        print(f"Found {len(movies)} movies with no poster")
+
+        async with httpx.AsyncClient() as client:
+            for movie in movies:
+                r = await client.get(
+                    f"{TMDB_BASE}/search/movie",
+                    headers=HEADERS,
+                    params={"query": movie.title, "language": "en-US"},
+                )
+                results = r.json().get("results", [])
+                if results and results[0].get("poster_path"):
+                    movie.poster_url = f"{POSTER_BASE}{results[0]['poster_path']}"
+                    print(f"Fixed: {movie.title}")
+                else:
+                    print(f"No poster found for: {movie.title}")
+
+        await session.commit()
+        print("Done")
+
+
 if __name__ == "__main__":
-    asyncio.run(seed())
+    asyncio.run(fix_missing_posters())
