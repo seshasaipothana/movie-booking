@@ -79,7 +79,7 @@ class ChatbotService:
         search_term = f"%{query.lower()}%"
         result = await db.execute(
             select(Movie).where(
-                (Movie.title.ilike(search_term)) | (Movie.genre.ilike(search_term))
+                Movie.title.ilike(search_term)
             ).limit(5)
         )
         movies = result.scalars().all()
@@ -200,7 +200,8 @@ class ChatbotService:
                 for tc in msg.tool_calls:
                     args = json.loads(tc.function.arguments)
                     result = await self._run_tool(tc.function.name, args, db, user_id or 0)
-                    logger.info(f"Tool {tc.function.name}({args}) -> {result}")
+                    print(f"TOOL CALL: {tc.function.name}({args})", flush=True)
+                    print(f"TOOL RESULT: {result}", flush=True)
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tc.id,
