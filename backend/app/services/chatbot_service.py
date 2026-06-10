@@ -27,7 +27,7 @@ IMPORTANT RULES:
 class ChatbotService:
     def __init__(self):
         self.client = Groq(api_key=settings.groq_api_key)
-        self.model = "llama3-groq-70b-8192-tool-use-preview"
+        self.model = "qwen/qwen3-32b"
         self.tools = [
             {
                 "type": "function",
