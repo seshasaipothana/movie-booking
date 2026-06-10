@@ -102,37 +102,29 @@ class ChatbotService:
 
     async def _book_tickets(self, showtime_id: int, num_seats: int, db: AsyncSession, user_id: int) -> dict:
         try:
-            seats_result = await db.execute(
-                select(Seat).where(
-                    Seat.showtime_id == showtime_id,
-                    Seat.is_booked == False
-                ).limit(num_seats)
-            )
-            available = seats_result.scalars().all()
-
-            if len(available) < num_seats:
-                return {"error": f"Only {len(available)} seats available"}
-
-            booking = Booking(user_id=user_id, showtime_id=showtime_id, status="confirmed")
-            db.add(booking)
-            await db.flush()
-
-            for seat in available:
-                seat.is_booked = True
-                seat.booking_id = booking.id
-
-            await db.commit()
-
             showtime = (await db.execute(
                 select(Showtime).where(Showtime.id == showtime_id)
-            )).scalar_one()
+            )).scalar_one_or_none()
+
+            if not showtime:
+                return {"error": f"Showtime {showtime_id} not found"}
+
+            booking = Booking(
+                user_id=user_id,
+                showtime_id=showtime_id,
+                status="confirmed",
+                total_amount=num_seats * float(showtime.price)
+            )
+            db.add(booking)
+            await db.commit()
+            await db.refresh(booking)
 
             return {
                 "success": True,
                 "booking_id": booking.id,
                 "seats_booked": num_seats,
                 "total_price": num_seats * float(showtime.price),
-                "message": f"Successfully booked {num_seats} seat(s)!"
+                "message": f"Successfully booked {num_seats} seat(s) for showtime {showtime_id}!"
             }
         except Exception as e:
             await db.rollback()
