@@ -28,7 +28,7 @@ STRICT RULES:
 class ChatbotService:
     def __init__(self):
         self.client = Groq(api_key=settings.groq_api_key)
-        self.model = "meta-llama/llama-4-scout-17b-16e-instruct"
+        self.model = "llama-3.3-70b-versatile"
         self.tools = [
             {
                 "type": "function",
@@ -173,7 +173,7 @@ class ChatbotService:
                     model=self.model,
                     messages=messages,
                     tools=self.tools,
-                    tool_choice="auto",
+                    tool_choice="required",
                     temperature=0.3,
                     max_tokens=1000
                 )
