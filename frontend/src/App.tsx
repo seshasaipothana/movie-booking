@@ -54,7 +54,7 @@ export default function App() {
     if (!selectedShowtime) return
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${protocol}//movie-booking-backend-8r8x.onrender.com/ws/showtimes/${selectedShowtime.id}`
+    const wsUrl = `${protocol}//movie-booking-sesh.duckdns.org/ws/showtimes/${selectedShowtime.id}`
     const ws = new WebSocket(wsUrl)
 
     ws.onmessage = (event) => {
@@ -129,7 +129,7 @@ export default function App() {
     if (!selectedShowtime) return
     
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${protocol}//movie-booking-backend-8r8x.onrender.com/ws/showtimes/${selectedShowtime.id}`
+    const wsUrl = `${protocol}//movie-booking-sesh.duckdns.org/ws/showtimes/${selectedShowtime.id}`
     const ws = new WebSocket(wsUrl)
     
     ws.onopen = () => {
