@@ -5,6 +5,7 @@ description = "Movie booking app backend — FastAPI + async SQLAlchemy + Redis"
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.18.4",
+    "anthropic>=0.105.2",
     "apscheduler>=3.11.2",
     "asyncpg>=0.31.0",
     "bcrypt>=5.0.0",
