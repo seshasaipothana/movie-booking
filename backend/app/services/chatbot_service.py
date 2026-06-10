@@ -82,7 +82,7 @@ class ChatbotService:
             ).limit(5)
         )
         movies = result.scalars().all()
-        return [{"id": m.id, "title": m.title, "genre": m.genre} for m in movies]
+        return [{"id": m.id, "title": m.title} for m in movies]
 
     async def _get_showtimes(self, movie_id: int, db: AsyncSession) -> list[dict]:
         from datetime import timezone
