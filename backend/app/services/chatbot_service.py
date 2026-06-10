@@ -85,8 +85,13 @@ class ChatbotService:
         return [{"id": m.id, "title": m.title, "genre": m.genre} for m in movies]
 
     async def _get_showtimes(self, movie_id: int, db: AsyncSession) -> list[dict]:
+        from datetime import timezone
+        now = datetime.now(timezone.utc)
         result = await db.execute(
-            select(Showtime).where(Showtime.movie_id == movie_id).limit(5)
+            select(Showtime).where(
+                Showtime.movie_id == movie_id,
+                Showtime.start_time > now
+            ).limit(5)
         )
         showtimes = result.scalars().all()
         return [
