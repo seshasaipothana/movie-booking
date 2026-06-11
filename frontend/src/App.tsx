@@ -250,11 +250,13 @@ export default function App() {
           {userName && (
             <span className="text-sm text-gray-500">Hi, {userName}</span>
           )}
+          <button onClick={() => setShowChat(!showChat)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors">
+            Ask AI
+          </button>
           <button
             onClick={() => { setShowMyBookings(true); setSelectedShowtime(null) }}
             className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
           >
-            <button onClick={() => setShowChat(!showChat)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors">💬 Ask AI</button>
             My Bookings
           </button>
           <button
@@ -313,45 +315,46 @@ export default function App() {
               </div>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
-  {[...movies].sort((a, b) => {
-  const seed = new Date().toDateString()
-  const hash = (s: string, id: number) => [...s].reduce((acc, c) => acc + c.charCodeAt(0), id)
-  return hash(seed, a.id) - hash(seed, b.id)
-}).slice(0, 10).map(movie => {
-    const movieShowtimes = showtimes.filter(s => s.movie_id === movie.id)
-    if (movieShowtimes.length === 0) return null
-    return (
-      <div key={movie.id} className="group">
-        <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-gray-100 mb-3">
-          {movie.poster_url ? (
-            <img
-              src={movie.poster_url}
-              alt={movie.title}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">
-              No poster
-            </div>
-          )}
-        </div>
-        <h3 className="text-sm font-medium text-gray-900 mb-2 truncate">{movie.title}</h3>
-        <p className="text-xs text-gray-400 mb-3">{movie.duration_minutes} min</p>
-        <div className="space-y-1">
-          {movieShowtimes.slice(0, 3).map(s => (
-            <button
-              key={s.id}
-              onClick={() => loadSeats(s)}
-              className="w-full text-xs py-1.5 px-3 bg-gray-100 hover:bg-gray-900 hover:text-white rounded-lg transition-all text-gray-600"
-            >
-              {new Date(s.start_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-            </button>
-          ))}
-        </div>
-      </div>
-    )
-  })}
-</div>
+                {[...movies].slice(0, 10).map(movie => {
+                  const movieShowtimes = showtimes.filter(s => s.movie_id === movie.id)
+                  return (
+                    <div key={movie.id} className="group">
+                      <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-gray-100 mb-3">
+                        {movie.poster_url ? (
+                          <img
+                            src={movie.poster_url}
+                            alt={movie.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">
+                            No poster
+                          </div>
+                        )}
+                      </div>
+                      <h3 className="text-sm font-medium text-gray-900 mb-2 truncate">{movie.title}</h3>
+                      <p className="text-xs text-gray-400 mb-3">{movie.duration_minutes} min</p>
+                      <div className="space-y-1">
+                        {movieShowtimes.length === 0 ? (
+                          <button disabled className="w-full text-xs py-1.5 px-3 bg-gray-200 text-gray-400 rounded-lg cursor-not-allowed">
+                            No showtimes
+                          </button>
+                        ) : (
+                          movieShowtimes.slice(0, 3).map(s => (
+                            <button
+                              key={s.id}
+                              onClick={() => loadSeats(s)}
+                              className="w-full text-xs py-1.5 px-3 bg-gray-100 hover:bg-gray-900 hover:text-white rounded-lg transition-all text-gray-600"
+                            >
+                              {new Date(s.start_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             )}
           </>
         )}
@@ -470,8 +473,8 @@ export default function App() {
                   </div>
                   <button
                     onClick={book}
-                    disabled={loading}
-                    className="px-8 py-3.5 bg-gray-900 hover:bg-gray-800 disabled:opacity-40 text-white rounded-xl font-medium transition-all"
+                    disabled={loading || selectedSeats.length === 0}
+                    className="px-8 py-3.5 bg-gray-900 hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-all"
                   >
                     {loading ? 'Processing...' : 'Confirm'}
                   </button>
