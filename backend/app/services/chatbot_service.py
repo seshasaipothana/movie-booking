@@ -100,35 +100,68 @@ class ChatbotService:
             for s in showtimes
         ]
 
-    async def _book_tickets(self, showtime_id: int, num_seats: int, db: AsyncSession, user_id: int) -> dict:
-        try:
-            showtime = (await db.execute(
-                select(Showtime).where(Showtime.id == showtime_id)
-            )).scalar_one_or_none()
+   async def _book_tickets(self, showtime_id: int, num_seats: int, db: AsyncSession, user_id: int) -> dict:
+    try:
+        # Step 1: Get the showtime
+        showtime = (await db.execute(
+            select(Showtime).where(Showtime.id == showtime_id)
+        )).scalar_one_or_none()
 
-            if not showtime:
-                return {"error": f"Showtime {showtime_id} not found"}
+        if not showtime:
+            return {"error": f"Showtime {showtime_id} not found"}
 
-            booking = Booking(
-                user_id=user_id,
-                showtime_id=showtime_id,
-                status="confirmed",
-                total_amount=num_seats * float(showtime.price)
-            )
-            db.add(booking)
-            await db.commit()
-            await db.refresh(booking)
+        # Step 2: Get ALL seats for this showtime's screen
+        all_seats = (await db.execute(
+            select(Seat).where(Seat.screen_id == showtime.screen_id)
+            .order_by(Seat.row, Seat.number)
+        )).scalars().all()
 
-            return {
-                "success": True,
-                "booking_id": booking.id,
-                "seats_booked": num_seats,
-                "total_price": num_seats * float(showtime.price),
-                "message": f"Successfully booked {num_seats} seat(s) for showtime {showtime_id}!"
-            }
-        except Exception as e:
-            await db.rollback()
-            return {"error": str(e)}
+        # Step 3: Get already booked seats
+        booked_bookings = (await db.execute(
+            select(Booking).where(Booking.showtime_id == showtime_id)
+        )).scalars().all()
+
+        booked_seat_ids = set()
+        for booking in booked_bookings:
+            if booking.seat_ids:
+                booked_seat_ids.update(booking.seat_ids)
+
+        # Step 4: Find available seats
+        available_seats = [s for s in all_seats if s.id not in booked_seat_ids]
+
+        if len(available_seats) < num_seats:
+            return {"error": f"Only {len(available_seats)} seats available, but {num_seats} requested"}
+
+        # Step 5: Pick the first N available seats (sequential, not random)
+        selected_seat_ids = [s.id for s in available_seats[:num_seats]]
+
+        # Step 6: Create booking WITH seat IDs
+        booking = Booking(
+            user_id=user_id,
+            showtime_id=showtime_id,
+            status="confirmed",
+            total_amount=num_seats * float(showtime.price),
+            seat_ids=selected_seat_ids  # ✅ NOW WE PASS SEAT IDS
+        )
+        db.add(booking)
+        await db.commit()
+        await db.refresh(booking)
+
+        # Step 7: Return helpful info
+        seat_numbers = [f"{s.row}{s.number}" for s in available_seats[:num_seats]]
+
+        return {
+            "success": True,
+            "booking_id": booking.id,
+            "seats_booked": num_seats,
+            "seat_numbers": seat_numbers,  # ✅ NOW WE RETURN WHICH SEATS
+            "total_price": num_seats * float(showtime.price),
+            "message": f"Successfully booked {num_seats} seat(s) {seat_numbers} for showtime {showtime_id}!"
+        }
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Booking error: {e}")
+        return {"error": str(e)}
 
     async def _run_tool(self, name: str, args: dict, db: AsyncSession, user_id: int) -> str:
         try:
