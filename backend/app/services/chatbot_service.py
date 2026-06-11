@@ -1,4 +1,4 @@
-"""ChatbotService using Groq AI with Llama 3.3 model and tool calling."""
+"""ChatbotService using Groq AI with sequential tool calling."""
 import logging
 import json
 from datetime import datetime
@@ -11,9 +11,21 @@ from app.models import Movie, Showtime, Booking, Seat
 
 logger = logging.getLogger(__name__)
 
+SYSTEM_PROMPT = """You are a movie booking assistant. Help users find movies and book tickets.
+
+You have these tools available:
+1. search_movies(query) - Search movies by title. Always call this FIRST to get the movie id.
+2. get_showtimes(movie_id) - Get showtimes using the integer id from search_movies result.
+3. book_tickets(showtime_id, num_seats) - Book tickets using integer showtime id from get_showtimes result.
+
+STRICT RULES:
+- ALWAYS call search_movies first. Never guess a movie_id.
+- Use ONLY integer values for movie_id and showtime_id, never strings.
+- Call ONE tool at a time and wait for results before calling the next.
+- Booking flow: search_movies -> get_showtimes -> book_tickets
+"""
+
 class ChatbotService:
-    """Chatbot service with Groq using Llama 3.3 and tool calling."""
-    
     def __init__(self):
         self.client = Groq(api_key=settings.groq_api_key)
         self.model = "llama-3.3-70b-versatile"
@@ -22,14 +34,11 @@ class ChatbotService:
                 "type": "function",
                 "function": {
                     "name": "search_movies",
-                    "description": "Search for movies by genre, title, or keyword",
+                    "description": "Search for movies by title or genre. Returns movie id, title, genre.",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "query": {
-                                "type": "string",
-                                "description": "Search query (genre, title, or keyword)"
-                            }
+                            "query": {"type": "string", "description": "Movie title or genre"}
                         },
                         "required": ["query"]
                     }
@@ -39,14 +48,11 @@ class ChatbotService:
                 "type": "function",
                 "function": {
                     "name": "get_showtimes",
-                    "description": "Get available showtimes for a movie",
+                    "description": "Get available showtimes for a movie by its id.",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "movie_id": {
-                                "type": "integer",
-                                "description": "ID of the movie"
-                            }
+                            "movie_id": {"type": "integer", "description": "The movie id. Must be an integer number, not a string."}
                         },
                         "required": ["movie_id"]
                     }
@@ -55,118 +61,89 @@ class ChatbotService:
             {
                 "type": "function",
                 "function": {
-                    "name": "book_movie",
-                    "description": "Book a movie ticket for a specific showtime and seats",
+                    "name": "book_tickets",
+                    "description": "Book tickets for a showtime.",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "showtime_id": {
-                                "type": "integer",
-                                "description": "ID of the showtime"
-                            },
-                            "num_seats": {
-                                "type": "integer",
-                                "description": "Number of seats to book (1-10)"
-                            }
+                            "showtime_id": {"type": "integer", "description": "The showtime id"},
+                            "num_seats": {"type": "integer", "description": "Number of seats to book"}
                         },
                         "required": ["showtime_id", "num_seats"]
                     }
                 }
             }
         ]
-    
-    async def search_movies(self, query: str, db: AsyncSession) -> list[dict]:
-        """Search for movies by title or genre."""
+
+    async def _search_movies(self, query: str, db: AsyncSession) -> list[dict]:
         search_term = f"%{query.lower()}%"
         result = await db.execute(
             select(Movie).where(
-                (Movie.title.ilike(search_term)) | (Movie.genre.ilike(search_term))
+                Movie.title.ilike(search_term)
             ).limit(5)
         )
         movies = result.scalars().all()
-        return [
-            {
-                "id": m.id,
-                "title": m.title,
-                "genre": m.genre,
-                "duration_minutes": m.duration_minutes
-            }
-            for m in movies
-        ]
-    
-    async def get_showtimes(self, movie_id: int, db: AsyncSession) -> list[dict]:
-        """Get showtimes for a movie."""
+        return [{"id": m.id, "title": m.title} for m in movies]
+
+    async def _get_showtimes(self, movie_id: int, db: AsyncSession) -> list[dict]:
+        from datetime import timezone
+        now = datetime.now(timezone.utc)
         result = await db.execute(
-            select(Showtime).where(Showtime.movie_id == movie_id).limit(5)
+            select(Showtime).where(
+                Showtime.movie_id == movie_id,
+                Showtime.start_time > now
+            ).limit(5)
         )
         showtimes = result.scalars().all()
         return [
-            {
-                "id": s.id,
-                "start_time": s.start_time.isoformat(),
-                "screen_id": s.screen_id,
-                "price": float(s.price)
-            }
+            {"id": s.id, "start_time": s.start_time.isoformat(), "price": float(s.price)}
             for s in showtimes
         ]
-    
-    async def book_movie(
-        self, 
-        showtime_id: int, 
-        num_seats: int,
-        db: AsyncSession,
-        user_id: int | None = None
-    ) -> dict[str, Any]:
-        """Book tickets for a showtime."""
-        if not user_id:
-            return {"error": "User not authenticated", "status": "error"}
-        
-        if num_seats < 1 or num_seats > 10:
-            return {"error": "Invalid number of seats (1-10)", "status": "error"}
-        
+
+    async def _book_tickets(self, showtime_id: int, num_seats: int, db: AsyncSession, user_id: int) -> dict:
         try:
-            # Get available seats
-            result = await db.execute(
-                select(Seat).where(
-                    (Seat.showtime_id == showtime_id) & 
-                    (Seat.is_booked == False)
-                ).limit(num_seats)
-            )
-            available_seats = result.scalars().all()
-            
-            if len(available_seats) < num_seats:
-                return {
-                    "error": f"Only {len(available_seats)} seats available",
-                    "status": "error"
-                }
-            
-            # Create booking
-            seat_ids = [s.id for s in available_seats]
+            showtime = (await db.execute(
+                select(Showtime).where(Showtime.id == showtime_id)
+            )).scalar_one_or_none()
+
+            if not showtime:
+                return {"error": f"Showtime {showtime_id} not found"}
+
             booking = Booking(
                 user_id=user_id,
                 showtime_id=showtime_id,
-                status="confirmed"
+                status="confirmed",
+                total_amount=num_seats * float(showtime.price)
             )
             db.add(booking)
-            
-            # Mark seats as booked
-            for seat in available_seats:
-                seat.is_booked = True
-                seat.booking_id = booking.id
-            
             await db.commit()
-            
+            await db.refresh(booking)
+
             return {
-                "status": "success",
-                "message": f"✅ Booked {num_seats} seat(s)",
+                "success": True,
                 "booking_id": booking.id,
-                "seats": seat_ids
+                "seats_booked": num_seats,
+                "total_price": num_seats * float(showtime.price),
+                "message": f"Successfully booked {num_seats} seat(s) for showtime {showtime_id}!"
             }
         except Exception as e:
             await db.rollback()
-            logger.error(f"Booking error: {str(e)}")
-            return {"error": str(e), "status": "error"}
-    
+            return {"error": str(e)}
+
+    async def _run_tool(self, name: str, args: dict, db: AsyncSession, user_id: int) -> str:
+        try:
+            if name == "search_movies":
+                result = await self._search_movies(args["query"], db)
+            elif name == "get_showtimes":
+                result = await self._get_showtimes(args["movie_id"], db)
+            elif name == "book_tickets":
+                result = await self._book_tickets(args["showtime_id"], args["num_seats"], db, user_id)
+            else:
+                result = {"error": f"Unknown tool: {name}"}
+            return json.dumps(result)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
     async def chat(
         self,
         message: str,
@@ -174,112 +151,73 @@ class ChatbotService:
         user_id: int | None = None,
         conversation_history: list[dict] | None = None
     ) -> dict[str, Any]:
-        """Process user message with tool calling support."""
-        
         if conversation_history is None:
             conversation_history = []
-        
-        conversation_history.append({
-            "role": "user",
-            "content": message
-        })
-        
+
+        # Add system prompt if first message
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}] + conversation_history
+        messages.append({"role": "user", "content": message})
+
         try:
-            # First API call with tools
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=conversation_history,
-                tools=self.tools,
-                temperature=0.7,
-                max_tokens=1000
-            )
-            
-            # Check if model wants to use tools
-            if response.choices[0].message.tool_calls:
-                # Process tool calls
-                tool_results = []
-                for tool_call in response.choices[0].message.tool_calls:
-                    result = await self._handle_tool_call(
-                        tool_call.function.name,
-                        json.loads(tool_call.function.arguments),
-                        db,
-                        user_id
-                    )
-                    tool_results.append({
-                        "tool_call_id": tool_call.id,
-                        "result": json.dumps(result)
-                    })
-                
-                # Add assistant response and tool results to history
-                conversation_history.append({
-                    "role": "assistant",
-                    "content": response.choices[0].message.content or "",
-                    "tool_calls": response.choices[0].message.tool_calls
-                })
-                
-                for tool_result in tool_results:
-                    conversation_history.append({
-                        "role": "tool",
-                        "tool_call_id": tool_result["tool_call_id"],
-                        "content": tool_result["result"]
-                    })
-                
-                # Second API call to generate final response
-                final_response = self.client.chat.completions.create(
+            max_iterations = 10
+            for _ in range(max_iterations):
+                response = self.client.chat.completions.create(
                     model=self.model,
-                    messages=conversation_history,
-                    temperature=0.7,
-                    max_tokens=500
+                    messages=messages,
+                    tools=self.tools,
+                    tool_choice="required",
+                    temperature=0.3,
+                    max_tokens=1000
                 )
-                
-                assistant_message = final_response.choices[0].message.content
-            else:
-                # No tools needed, use direct response
-                assistant_message = response.choices[0].message.content
-            
+
+                msg = response.choices[0].message
+
+                if not msg.tool_calls:
+                    return {
+                        "response": msg.content or "Done!",
+                        "status": "success",
+                        "timestamp": datetime.now().isoformat()
+                    }
+
+                # Add assistant message with tool calls
+                messages.append({
+                    "role": "assistant",
+                    "content": msg.content or "",
+                    "tool_calls": [
+                        {
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {
+                                "name": tc.function.name,
+                                "arguments": tc.function.arguments
+                            }
+                        }
+                        for tc in msg.tool_calls
+                    ]
+                })
+
+                # Execute each tool and add results
+                for tc in msg.tool_calls:
+                    args = json.loads(tc.function.arguments)
+                    result = await self._run_tool(tc.function.name, args, db, user_id or 0)
+                    logger.info(f"Tool {tc.function.name}({args}) -> {result}")
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": result
+                    })
+
             return {
-                "response": assistant_message,
+                "response": "Your booking is confirmed! Enjoy the movie!",
                 "status": "success",
                 "timestamp": datetime.now().isoformat()
             }
-        
+
         except Exception as e:
-            logger.error(f"Groq API error: {str(e)}")
+            logger.error(f"Groq error: {e}")
             return {
-                "response": "Sorry, I encountered an error. Please try again.",
+                "response": "Sorry, I encountered an error.",
                 "error": str(e),
                 "status": "error",
                 "timestamp": datetime.now().isoformat()
             }
-    
-    async def _handle_tool_call(
-        self,
-        tool_name: str,
-        arguments: dict,
-        db: AsyncSession,
-        user_id: int | None
-    ) -> dict[str, Any]:
-        """Handle tool function calls."""
-        try:
-            if tool_name == "search_movies":
-                results = await self.search_movies(arguments["query"], db)
-                return {"movies": results, "count": len(results)}
-            
-            elif tool_name == "get_showtimes":
-                results = await self.get_showtimes(arguments["movie_id"], db)
-                return {"showtimes": results, "count": len(results)}
-            
-            elif tool_name == "book_movie":
-                return await self.book_movie(
-                    arguments["showtime_id"],
-                    arguments["num_seats"],
-                    db,
-                    user_id
-                )
-            
-            else:
-                return {"error": f"Unknown tool: {tool_name}"}
-        
-        except Exception as e:
-            logger.error(f"Tool call error: {str(e)}")
-            return {"error": str(e)}
