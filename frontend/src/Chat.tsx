@@ -26,7 +26,8 @@ export default function Chat({ onClose }: { onClose: () => void }) {
     setInput('')
     setLoading(true)
     try {
-      const res = await api.post('/api/chat', { message: input, user_id: 1 })
+      const userId = parseInt(localStorage.getItem('userId') || '1')
+      const res = await api.post('/api/chat', { message: input, user_id: userId })
       const botMsg: Message = { id: (Date.now() + 1).toString(), type: 'bot', text: res.data.response }
       setMessages(prev => [...prev, botMsg])
     } catch (error) {

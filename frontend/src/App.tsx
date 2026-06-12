@@ -98,11 +98,12 @@ export default function App() {
     const body = isLogin ? { email, password } : { email, password, name }
     const r = await api.post(url, body)
     localStorage.setItem('token', r.data.access_token)
+    localStorage.setItem('userId', r.data.user_id.toString())
     const displayName = isLogin ? email.split('@')[0] : name
     localStorage.setItem('userName', displayName)
     setUserName(displayName)
     setToken(r.data.access_token)
-  } catch {
+  }catch {
     showMsg(isLogin ? 'Invalid credentials' : 'Sign up failed', 'error')
   } finally {
     setLoading(false)
