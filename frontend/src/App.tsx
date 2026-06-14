@@ -97,12 +97,10 @@ export default function App() {
     const url = isLogin ? '/api/auth/login' : '/api/auth/signup'
     const body = isLogin ? { email, password } : { email, password, name }
     const r = await api.post(url, body)
+    console.log('Auth response:', r.data)
+    
     localStorage.setItem('token', r.data.access_token)
-    localStorage.setItem('userId', r.data.user_id.toString())
-    const displayName = isLogin ? email.split('@')[0] : name
-    localStorage.setItem('userName', displayName)
-    setUserName(displayName)
-    setToken(r.data.access_token)
+    localStorage.setItem('userId', String(r.data.user_id))
   }catch {
     showMsg(isLogin ? 'Invalid credentials' : 'Sign up failed', 'error')
   } finally {
